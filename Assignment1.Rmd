@@ -11,13 +11,34 @@ if(!require(readxl)) install.packages("readxl", repos = "http://cran.us.r-projec
 if(!require(cluster)) install.packages("cluster", repos = "http://cran.us.r-project.org")
 if(!require(NbClust)) install.packages("NbClust", repos = "http://cran.us.r-project.org")
 if(!require(fpc)) install.packages("fpc", repos = "http://cran.us.r-project.org")
+if(!require(mice)) install.packages("mice", repos = "http://cran.us.r-project.org")
+if(!require(VIM)) install.packages("VIM", repos = "http://cran.us.r-project.org")
 
 ```
 
 ```{r}
 df1 <- read_excel("owid-covid-data.xlsx", sheet = "Data")
+visdat::vis_miss(df1)
 
+str(df1)
 ```
+
+```{r}
+missing_row_values <- sum(!complete.cases(df1))
+nrow(df1)
+missing_row_values
+```
+There are 163 rows out of 208 with missing values, therefore simply dismissing rows with missing data will lead to a great loss of valuable information.
+
+```{r}
+summary(df1)
+```
+
+
+```{r}
+aggr_plot <- VIM::aggr(df1, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df1), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+The results show that handwashing_facilites is missing 56.25% of the values followed by extreme_poverty missing 42.3% of the values. In total, 78.4% of the samples have missing values.
 
 ## R Markdown
 
@@ -25,9 +46,22 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+```{r}
+tempData <- mice::mice(df1,m=5,maxit=50, method='cart', seed=500)
+#summary(tempData)
 ```
+
+```{r}
+mice::densityplot(tempData)
+mice::stripplot(tempData, pch = 20, cex = 1.2)
+```
+
+```{r}
+completedData <- mice::complete(tempData, 'long')
+completedData$
+```
+
+
 
 ## Including Plots
 
