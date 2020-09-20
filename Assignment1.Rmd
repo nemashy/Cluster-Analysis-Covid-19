@@ -47,8 +47,11 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r}
-tempData <- mice::mice(df1,m=5,maxit=50, method='cart', seed=500)
-#summary(tempData)
+# tempData <- mice::mice(df1,m=5,maxit=50, method='cart', seed=500)
+# summary(tempData)
+save(tempData, file = "replaced_missing_data.RData")
+load("replaced_missing_data.RData")
+
 ```
 
 ```{r}
@@ -57,10 +60,44 @@ mice::stripplot(tempData, pch = 20, cex = 1.2)
 ```
 
 ```{r}
-completedData <- mice::complete(tempData, 'long')
-completedData$
+completedData <- mice::complete(tempData, 2)
+View(completedData)
+visdat::vis_miss(completedData)
+str(completedData)
+unique(completedData$date)
+test = completedData[,c(-2,-3,-4)]
+rownames(test) <- test$location
+test = test[,-1]
 ```
 
+```{r}
+# K-means clustering
+set.seed(123)
+km.out <- kmeans(test, 6, nstart = 25)
+# k-means group number of each observation
+head(km.out$cluster)
+
+```
+
+```{r}
+# Compute pairewise distance matrices
+dist.out <- dist(test, method = "euclidean")
+# Hierarchical clustering results
+hc <- hclust(dist.out, method = "complete")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+# 
+rect.hclust(hc, k = 6, border = 2:3)
+```
+
+```{r}
+hcd <- as.dendrogram(hc)
+# Define nodePar
+nodePar <- list(lab.cex = 0.6, pch = c(20, 19),
+                cex = 0.7, col = c("green","yellow"))
+plot(hcd,  xlab = "Height", nodePar = nodePar, main = "Cluster dendrogram",
+     edgePar = list(col = c("red","blue"), lwd = 2:1), horiz = TRUE)
+```
 
 
 ## Including Plots
