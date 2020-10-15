@@ -6,106 +6,938 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
+
+# Loading all necessary packages or install if packages don't exist
+
 knitr::opts_chunk$set(echo = TRUE)
 if(!require(readxl)) install.packages("readxl", repos = "http://cran.us.r-project.org")
+if(!require(readr)) install.packages("readr", repos = "http://cran.us.r-project.org")
 if(!require(cluster)) install.packages("cluster", repos = "http://cran.us.r-project.org")
 if(!require(NbClust)) install.packages("NbClust", repos = "http://cran.us.r-project.org")
 if(!require(fpc)) install.packages("fpc", repos = "http://cran.us.r-project.org")
 if(!require(mice)) install.packages("mice", repos = "http://cran.us.r-project.org")
 if(!require(VIM)) install.packages("VIM", repos = "http://cran.us.r-project.org")
+if(!require(factoextra)) install.packages("factoextra", repos = "http://cran.us.r-project.org")
+if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org")
+if(!require(purrr)) install.packages("purrr", repos = "http://cran.us.r-project.org")
+if(!require(tidyr)) install.packages("tidyr", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+if(!require(visdat)) install.packages("visdat", repos = "http://cran.us.r-project.org")
+if(!require(Hmisc)) install.packages("Hmisc", repos = "http://cran.us.r-project.org")
+if(!require(missForest)) install.packages("missForest", repos = "http://cran.us.r-project.org")
+if(!require(corrplot)) install.packages("corrplot", repos = "http://cran.us.r-project.org")
 
 ```
 
 ```{r}
+
+# Display this on the first page to see what and from where each variable was collected.
+owid_covid_codebook <- read_csv("owid-covid-codebook.csv")
+View(owid_covid_codebook)
+```
+
+### What about standardising the data????
+
+
+```{r}
+
+# Reading the data
 df1 <- read_excel("owid-covid-data.xlsx", sheet = "Data")
-visdat::vis_miss(df1)
 
-str(df1)
-```
+# Check if data has been imported correctly
+head(df1) 
+tail(df1)
 
-```{r}
-missing_row_values <- sum(!complete.cases(df1))
-nrow(df1)
-missing_row_values
-```
-There are 163 rows out of 208 with missing values, therefore simply dismissing rows with missing data will lead to a great loss of valuable information.
+# Look at the structure of the data
+str(df1) 
 
-```{r}
-summary(df1)
-```
+missing_data_visual <- vis_miss(df1, sort_miss = T) # Visualise to see rows/columns with missing data
+missing_data_visual
 
-
-```{r}
 aggr_plot <- VIM::aggr(df1, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df1), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+The data shows that handwashing_facilties, extreme poverty, male smokers and female smokers are among the columns with the highest percentages of missing data.
+
+```{r}
+
+# Determine the percentage of rows with missing data
+
+missing_rows <- sum(!complete.cases(df1))
+total_rows <- nrow(df1)
+percentage_of_missing_rows <- missing_rows/total_rows * 100
+percentage_of_missing_rows
+
+```
+Over 78% of rows have missing data therefore simply omitting the rows with missing will lead to a loss a huge size of important data.
+
+Population density missing values will be imputed using the data from wikipedia on the following site https://en.wikipedia.org/wiki/List_of_countries_and_dependencies_by_population_density
+
+It is important to indicate that the data was given in 2019 but given that population densities change very slowly, this is better than replacing with an average/median.
+
+```{r}
+
+# Imputing population density missing values.
+
+# The process includes finding countries with
+# missing data in a column of interest and 
+# then impute the missing data with data from
+# a source
+
+df2 <- df1[is.na(df1$population_density),] # Dataframe with missing value in a column
+missing_data_countries <-  df2$location
+missing_data_countries
+imputations <- c(19.83, 2.25, 92, 652.11, 804.14, 898.28, 924.49, 140.13, 65.64, NA, 0.21)
+position_in_vector <- which(df1$location %in% missing_data_countries)
+df1$population_density[position_in_vector] <-  imputations # Imputing the data
+
+sum(is.na(df1$population_density)) # Check if data has been imputed
+
+```
+
+Median age missing values will be imputed using the data found from the following wikipedia site: https://en.wikipedia.org/wiki/List_of_countries_by_median_age
+
+
+
+```{r}
+
+# Imputing median_age missing values.
+
+df3 <- df1[is.na(df1$median_age),]
+missing_data_countries <-  df3$location
+missing_data_countries
+median_ages  <- c(46.2, 37.2, 35.5, 44.3, 44.6, 37.5, 30.5, 43.7, 55.4, 45.2, NA, 35.7, 43.6, NA, 37.2, 40.5, 34.9, 34.3, 34.8, 36.5, 41.1, 34.6, 32.8, NA)
+position_in_vector <- which(df1$location %in% missing_data_countries)
+
+df1$median_age[position_in_vector] <-  imputations
+
+sum(is.na(df1$median_age))
+
+```
+
+Median ages data was added using data from the 2019 data https://www.cia.gov/library/publications/the-world-factbook/fields/343rank.html
+
+Ony data for Syria was found.
+```{r}
+
+# Imputing aged_65_older missing values.
+
+df4 <- df1[is.na(df1$aged_65_older),]
+missing_data_countries <-  df4$location
+missing_data_countries
+median_ages  <- c(NA, 4.3, 13.86, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 18.6, NA, NA, NA, NA, NA, NA, NA, NA, NA )
+position_in_vector <- which(df1$location %in% missing_data_countries)
+
+df1$aged_65_older[position_in_vector] <-  median_ages
+
+sum(is.na(df1$aged_65_older))
+
+```
+
+Median age above 75 years old was ignored
+
+
+Searching the source of the data maps to a site: https://github.com/owid/covid-19-data/blob/master/public/data/owid-covid-codebook.csv which says the gdp_per_capita 	Gross domestic product at purchasing power parity (constant 2011 international dollars), most recent year available. Given that the most recent data from the world bank (https://databank.worldbank.org/source/jobs/Series/NY.GDP.PCAP.PP.KD#) which matches this data is for the year 2016, the data was used for imputing the data. Note the data is not available
+
+
+
+
+Extreme poverty is a population with an income of less than $1.90 a day. From the data the Share of the population living in extreme poverty, most recent year available since 2010. The data from the following site https://en.wikipedia.org/wiki/List_of_countries_by_percentage_of_population_living_in_poverty the data is very similar to that available without missing values, therefore it will be better to use the data for imputing. 
+
+Most countries with 0 percent were having missing values
+
+```{r}
+
+# Imputing extreme_poverty missing values.
+
+df4 <- df1[is.na(df1$extreme_poverty),]
+missing_data_countries <-  df4$location
+missing_data_countries
+extreme_pov <- rep(NA, length(missing_data_countries))
+
+extreme_pov[c(1, 2, 3, 4, 8, 9, 11, 12, 13, 16, 20, 22, 23, 25, 29, 32, 34, 35, 36, 38, 39, 40, 47, 48, 50, 51, 52, 59, 69, 76, 86, 87, 88)] <- c(47.6, 16.1, 3.2, 66.3, 49.7, 53.5, 42.7, 14.9, 42, 0, 0.2, 0, 7.3, 6.1, 1.7, 62.1, 0, 0, 0, 0, 0, 0, 0, 0, 5.5, 0, 0, 13.9, 1.7, 3.4, 14, 23.4, 10.2)
+
+position_in_vector <- which(df1$location %in% missing_data_countries)
+df1$extreme_poverty[position_in_vector] <-  extreme_pov
+
+sum(is.na(df1$extreme_poverty))
+```
+
+This was skipped due to insufficient data to fill in the missing values.
+```{r}
+df4 <- df1[is.na(df1$cardiovasc_death_rate),]
+missing_data_countries <-  df4$location
+missing_data_countries
+
+```
+
+```{r}
+
+# Imputing life_expectancy missing values.
+
+df4 <- df1[is.na(df1$life_expectancy),]
+missing_data_countries <-  df4$location
+missing_data_countries
+
+life_exp <- c(82.6, 80.6, 71.95)
+position_in_vector <- which(df1$location %in% missing_data_countries)
+
+df1$life_expectancy[position_in_vector] <-  life_exp
+
+sum(is.na(df1$life_expectancy))
+```
+
+
+female and male smokers info not enough
+handwashing facilities skipped because data is not enough.
+hospital bed per thousand informatiion was found to be too old for example Chad which had data for 2005. Given that there are many years between the time the data was collected and this year the data was ignored.
+
+From the world bank data on life expectancy ( https://data.worldbank.org/indicator/SP.DYN.LE00.IN ), the life expectancy of Guernsey, Jersey and Kosovo are 82.6, 80.6, 71.95 years respectively.
+
+
+
+```{r echo=FALSE,  out.width = '100%', out.height='100%', fig.align="center" }
+knitr::include_graphics("Capture.png")
+```
+
+```{r}
+# For the gdp per capita the missing values will be replaced by the mean for each region under the assumption that countries that are closer to each other usually have similar rates of poverty measures/gdp_per_capita, hospital beds per thousand, aged_65_older and aged_70_older
+
+
+df6 <- df1 %>%
+    group_by(continent) %>%
+    mutate(
+        population_density=ifelse(is.na(population_density),mean(population_density,na.rm=TRUE),population_density),
+        extreme_poverty=ifelse(is.na(extreme_poverty),mean(extreme_poverty,na.rm=TRUE),extreme_poverty),
+        gdp_per_capita=ifelse(is.na(gdp_per_capita),mean(gdp_per_capita,na.rm=TRUE),gdp_per_capita),
+        hospital_beds_per_thousand=ifelse(is.na(hospital_beds_per_thousand),mean(hospital_beds_per_thousand,na.rm=TRUE),hospital_beds_per_thousand),
+        aged_65_older=ifelse(is.na(aged_65_older),mean(aged_65_older,na.rm=TRUE),aged_65_older),
+        aged_70_older=ifelse(is.na(aged_70_older),mean(aged_70_older,na.rm=TRUE),aged_70_older)
+  
+    )
+```
+
+
+
+```{r}
+
+# Remove handwashing_facilities since there is not enough 
+# data for imputation
+
+df7 <- select(df6,-handwashing_facilities)
+visdat::vis_miss(df7)
+```
+
+
+```{r}
+
+# Visualize the proportion of missing values in rows/columns
+
+aggr_plot <- VIM::aggr(df7, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df7), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+
 ```
 The results show that handwashing_facilites is missing 56.25% of the values followed by extreme_poverty missing 42.3% of the values. In total, 78.4% of the samples have missing values.
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r}
-# tempData <- mice::mice(df1,m=5,maxit=50, method='cart', seed=500)
-# summary(tempData)
-save(tempData, file = "replaced_missing_data.RData")
+ 
+# geom_boxplot proposes several arguments to custom appearance
+ggplot(df7, aes(x=continent, y=total_cases_per_million)) + 
+    geom_boxplot(
+        
+        # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="red",
+        outlier.fill="red",
+        outlier.size=3
+    
+    )
+
+ggplot(df7, aes(x=continent, y=new_cases_per_million)) + 
+    geom_boxplot(
+        
+        # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="red",
+        outlier.fill="red",
+        outlier.size=3
+    
+    )
+
+ggplot(df7, aes(x=continent, y=new_cases_smoothed)) + 
+    geom_boxplot(
+        
+        # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=3
+    
+    )
+
+
+ggplot(df7, aes(x=continent, y=total_deaths_per_million)) + 
+    geom_boxplot(
+        
+        # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="red",
+        outlier.fill="red",
+        outlier.size=3
+    
+    )
+
+ggplot(df7, aes(x=continent, y=new_deaths_per_million)) + 
+    geom_boxplot(
+        
+        # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="red",
+        outlier.fill="red",
+        outlier.size=3
+    
+    )
+
+ggplot(df7, aes(x=continent, y=new_deaths_smoothed_per_million)) + 
+    geom_boxplot(
+        
+        # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="red",
+        outlier.fill="red",
+        outlier.size=3
+    
+    )
+
+
+
+```
+
+
+```{r}
+
+# Plot box and whisker for all variables
+
+df7 %>%
+  keep(is.numeric) %>%
+  select(c(1:8)) %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_boxplot(
+      # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=2
+    )
+
+df7 %>%
+  keep(is.numeric) %>%
+  select(c(9:16)) %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_boxplot(
+            # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=2
+    )
+
+df7 %>%
+  keep(is.numeric) %>%
+  select(c(17:25)) %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_boxplot(
+            # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=2
+    )
+
+
+```
+
+The histograms also suggest that there is a negative value in new_cases_smoothed_per_million. 
+
+
+```{r}
+# Find the obserservation with negative value
+df7 %>% 
+  filter(new_cases_smoothed_per_million < 0)
+
+# Replace negative value with continental mean
+df7  = df7 %>% 
+  group_by(continent) %>%
+  mutate(new_cases_smoothed_per_million = ifelse(new_cases_smoothed_per_million < 0,
+                                                 mean(new_cases_smoothed_per_million),
+                                                 new_cases_smoothed_per_million),
+         new_cases_smoothed = ifelse(new_cases_smoothed < 0,
+                                     mean(new_cases_smoothed),
+                                     new_cases_smoothed))
+  
+```
+
+Upon further investigation, Luxembourg seems to have negative values for new_cases_smoothed and new_cases_smoothed_per_million. This is probably because the new_cases_smoothed_per_million is derived from new_cases_smoothed. 
+
+
+```{r}
+df_correlation_plot <- df7 %>%
+  keep(is.numeric)
+
+correlation_matrix <- cor(df_correlation_plot)
+corrplot(correlation_matrix, method="circle")
+```
+
+
+
+The mice package allows multivariate imputation by chained equations
+
+MICE assumes that the missing data are Missing at Random (MAR), which means that the propensity for a data point to be missing is not related to the missing data but is related to some of the observed data.
+https://www.theanalysisfactor.com/mar-and-mcar-missing-data/
+
+Therefore it is important to determine which columns have data points that may be missing at random. The imputation process is not a one size fits all method.
+
+There is also the Amelia package which also makes an assumption that the missing data is random in nature (MSR)
+
+
+Hmisc is a multiple purpose package useful for data analysis, high – level graphics, imputing missing values, advanced table making, model fitting & diagnostics (linear regression, logistic regression & cox regression) etc. Hmisc assumes linearity in the variables being predicted.
+
+mi (Multiple imputation with diagnostics) package provides several features for dealing with missing values. Like other packages, it also builds multiple imputation models to approximate missing values. And, uses predictive mean matching method like the mice package.
+
+The following variables need need impiutation using some of the methods.
+
+## female_smokers and male_smokers, cardiovasc_death_rate and diabetes prevalence are MACR variables therefore the MICE package will be used on this data.
+
+various packages will be used for imputation and the one that yields the best result will be chosen.
+
+
+
+```{r}
+
+
+# Impute missing data using the mice package
+
+#imputed_data <- mice(df7,m=5,maxit=50, method='cart', seed=500)
+#summary(imputed_data)
+#save(imputed_data, file = "replaced_missing_data.RData")
 load("replaced_missing_data.RData")
 
+sum(is.na(imputed_data))
 ```
 
 ```{r}
-mice::densityplot(tempData)
-mice::stripplot(tempData, pch = 20, cex = 1.2)
+# Check the quality of imputations
+
+mice::densityplot(imputed_data)
+
 ```
 
 ```{r}
-completedData <- mice::complete(tempData, 2)
+# Select one of the imputed datasets
+
+completedData <- mice::complete(imputed_data, 2)
 View(completedData)
-visdat::vis_miss(completedData)
 str(completedData)
-unique(completedData$date)
-test = completedData[,c(-2,-3,-4)]
-rownames(test) <- test$location
-test = test[,-1]
-```
 
-```{r}
-# K-means clustering
-set.seed(123)
-km.out <- kmeans(test, 6, nstart = 25)
-# k-means group number of each observation
-head(km.out$cluster)
+# Remove isocode, continent and data ????
+# Is it necessary continentt
+
+df8 <- completedData[,c(-2,-3,-4)]
+rownames(df8) <- df8$location
+
+# Removing country names
+mice_data_for_clustering <- df8[,-1]
 
 ```
 
+
+
+This will be support for dimension reduction.
 ```{r}
-# Compute pairewise distance matrices
-dist.out <- dist(test, method = "euclidean")
+
+correlation_matrix <- cor(data_for_clustering)
+corrplot(correlation_matrix, method="circle")
+```
+
+
+
+It is not enough to try out one package for imputing data therefore try out more!
+The question is if any one value of the observation is missing, will it affect the missingness of a specific variable.
+
+
+The percentage of population aged_65_older looks to have regional patterns therefore it is justified to use regional medians/averages for imputation. Since aged_70_older can is closely related to aged_65_older it is decided to use the same method.
+
+
+
+```{r}
+# Impute missing data using the Hmisc package
+
+df7.mis <- prodNA(df7, noNA = 0.1)
+summary(df7.mis)
+
+impute_arg <- aregImpute(~ cardiovasc_death_rate 
+                         + diabetes_prevalence + female_smokers + male_smokers, data = df7.mis, n.impute = 5)
+
+completeData2 <- impute.transcan(impute_arg, imputation=1, data=df7.mis, list.out=TRUE,pr=FALSE, check=FALSE) 
+head(completeData2)
+class(completeData2)
+
+df_Hmisc = df7 # Make a copy of df7
+
+df_Hmisc$cardiovasc_death_rate = completeData2$cardiovasc_death_rate
+df_Hmisc$diabetes_prevalence = completeData2$diabetes_prevalence
+df_Hmisc$female_smokers = completeData2$female_smokers
+df_Hmisc$male_smokers = completeData2$male_smokers
+
+df_Hmisc <- completedData[,c(-2,-3,-4)]
+rownames(df_Hmisc) <- df_Hmisc$location
+
+# Removing country names
+df_Hmisc_for_clustering <- df_Hmisc[,-1]
+
+summary(df_Hmisc_for_clustering)
+```
+
+
+
+```{r}
+#missForest
+install.packages("missForest")
+library(missForest)
+
+#load data
+df9 = df7[c(-4:-1)]
+#seed 10% missing values
+df9.mis <- prodNA(df8, noNA = 0.1)
+summary(df9.mis)
+
+#impute missing values, using all parameters as default values
+df9.imp <- missForest(df9.mis)
+
+#check imputed values
+> iris.imp$ximp
+
+#check imputation error
+> iris.imp$OOBerror
+
+NRMSE         PFC
+0.14148554 0.02985075
+```
+
+```{r}
+data.out <- mice_data_for_clustering
+```
+
+
+The randomizing, re-running, averaging and final run is a very good advice.
+
+
+```{r}
+
+# Using k-means clustering
+k.max <- 10
+
+# data.out <- df_Hmisc_for_clustering[-22,-23]
+sil <- rep(0, k.max)
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+
+km.res <- kmeans(data.out, centers = i, nstart = 25)
+ss <- silhouette(km.res$cluster, dist(data.out))
+sil[i] <- mean(ss[, 3])
+}
+# Plot the average silhouette width
+plot(1:k.max, sil, type = "b", pch = 19,
+frame = FALSE, xlab = "Number of clusters k")
+abline(v = which.max(sil), lty = 2)
+
+print(sil[6])
+
+```
+
+
+```{r}
+# Hierarchical clustering
+# Compute pairwise distance matrices
+dist.out <- dist(data.out,
+                 method = "euclidean")
 # Hierarchical clustering results
-hc <- hclust(dist.out, method = "complete")
+hc <- hclust(dist.out,
+             method = "complete")
 # Visualization of hclust
 plot(hc, labels = F,-1)
 # 
 rect.hclust(hc, k = 6, border = 2:3)
+
+hcd <- as.dendrogram(hc)
+# Define nodePar
+nodePar <- list(lab.cex = 0.6,
+                pch = c(20, 19),
+                cex = 0.7,
+                col = c("green","yellow"))
+plot(hcd,
+     xlab = "Height",
+     nodePar = nodePar,
+     main = "Cluster dendrogram",
+     edgePar = list(col = c("red","blue"), lwd = 2:1),
+     horiz = TRUE)
+```
+
+
+
+```{r}
+ # clustering visualization
+sub_grp <- cutree(hc, k = 6)
+fviz_cluster(list(data = data_for_clustering,
+                  cluster = sub_grp ))
+```
+
+
+```{r pressure, echo=FALSE}
+fviz_nbclust(data_for_clustering,
+             FUN = hcut,
+             method = "wss")
 ```
 
 ```{r}
-hcd <- as.dendrogram(hc)
-# Define nodePar
-nodePar <- list(lab.cex = 0.6, pch = c(20, 19),
-                cex = 0.7, col = c("green","yellow"))
-plot(hcd,  xlab = "Height", nodePar = nodePar, main = "Cluster dendrogram",
-     edgePar = list(col = c("red","blue"), lwd = 2:1), horiz = TRUE)
+c = fviz_nbclust(data_for_clustering,
+                 FUN = hcut,
+                 method = "silhouette")
+c
+```
+
+```{r}
+# df2 = df7[,c(-2,-3,-4)]
+# rownames(df2) <- df2$location
+# df3 <- dplyr::select(df2, c(-1, -19, -22, -23, -24))
+# 
+# # Compute pairewise distance matrices
+# dist.out <- dist(data_for_clustering, method = "euclidean")
+# # Hierarchical clustering results
+# hc <- hclust(dist.out, method = "complete")
+# # Visualization of hclust
+# plot(hc, labels = F,-1)
+# #
+# rect.hclust(hc, k = 6, border = 2:3)
+# 
+# 
+# sub_grp <- cutree(hc, k = 6)
+# fviz_cluster(list(data = data_for_clustering, cluster = sub_grp ))
+# 
+# d = fviz_nbclust(df3, FUN = hcut, method = "silhouette")
+# 
+
+df2 = df7[,c(-2,-3,-4)]
+rownames(df2) <- df2$location
+df3 <- dplyr::select(df2, c(-1, -19, -22, -23, -24)) 
+df4 <- df3 %>% select(c(2, 3, 6, 10, 11, 12))
+
+# Compute pairewise distance matrices
+dist.out <- dist(df4, method = "euclidean")
+# Hierarchical clustering results
+hc <- hclust(dist.out, method = "complete")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+#
+rect.hclust(hc, k = 6, border = 2:3)
+
+
+sub_grp <- cutree(hc, k = 6)
+fviz_cluster(list(data = df4, cluster = sub_grp ))
+
+d = fviz_nbclust(df4, FUN = hcut, method = "silhouette")
+
+d
+
+                      
+```
+
+```{r}
+value1 = c[["data"]][["y"]][6]
+value2 = d[["data"]][["y"]][6]
+value1
+value2
 ```
 
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+# Partitioning using k-medoids
+pam.out <- pam(data.out, 6)
+head(pam.out$cluster)
+plot(pam.out)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+# Partitioning using Clara
+clara.out <- clara(data.out, 6, samples=10)
+# Silhouette plot
+plot(silhouette(clara.out), col = 2:3, main = "Silhouette plot")
+```
+The dataset is very small and this results in Clara performing worse than PAM.
+
+
+```{r}
+# Using DBSCAN
+t = scale(data.out)
+db <- fpc::dbscan(data.out, eps = 47000, MinPts =3 )
+db[["cluster"]]
+sil.dbscan <- silhouette(db$cluster, dist(t))
+summary(sil.dbscan)
+plot(sil.dbscan, col = 2:3, main = "Silhouette plot")
+```
+
+
+
+
+```{r}
+som_grid <- somgrid(xdim = 5, ydim=5, topo="hexagonal")
+set.seed(7)
+som_model <- som(as.matrix(data.out),grid=som_grid, 
+                 rlen=5000, 
+                 alpha=c(0.05,0.01), 
+                 keep.data = TRUE
+                 )
+
+plot(som_model, type="changes")
+plot(som_model, type="changes")
+plot(som_model, type="codes",codeRendering = "segments")
+
+data <- som_model$codes[[1]]
+wss <- (nrow(data)-1)*sum(apply(data,2,var)) 
+for (i in 2:15) {
+  wss[i] <- sum(kmeans(data, centers=i)$withinss)
+}
+plot(wss)
+
+
+
+som_cluster <- cutree(hclust(dist(som_model$codes[[1]])), 6)
+
+plot(som_model, type="mapping", labels=animals$name, 
+     main = "Clusters") 
+add.cluster.boundaries(som_model, som_cluster)
+
+
+plot(som_model, type="quality")
+
+plot(som_model, type="mapping")
+
+
+som_model$unit.classif
+
+som.hc <- cutree(hclust(dist(som_model$codes[[1]])), 6)
+add.cluster.boundaries(som_model, som.hc)
+
+
+plot(som_model, type="mapping", 
+     main = "Clusters")
+```
+
+
+```{r}
+iris.gathered <- df1 %>%
+  as_tibble() %>%
+  select_if(is.numeric) %>%
+  gather(key = "variable", value = "value")
+
+head(iris.gathered, 3)
+
+ggplot(iris.gathered, aes(value)) +
+  geom_density() +
+  facet_wrap(~variable)
+```
+
+
+```{r}
+library(glmnet)
+train = select(df1, c(-1,-2,-4))
+train$continent = as.factor(train$continent)
+
+test1 = data_for_clustering %>% mutate(continent = train$continent)
+
+X <- data.matrix(test1[,c(-27)])
+Y <- data.matrix(test1[27])
+
+set.seed(1)
+mod2 <- glmnet(X, Y, alpha = 1, nfolds = 10, type.measure = 'class', standardize = T, family = 'multinomial')
+cv <- cv.glmnet(X, Y, alpha = 1, nfolds = 10, type.measure = 'class', standardize = T, family = 'multinomial')
+
+plot(cv)
+
+c1 <- coef(mod2, s=cv$lambda.1se)
+c2 <- coef(mod2, s=cv$lambda.min)
+c1
+
+```
+
+```{r}
+# Attempt clustering after dimension reduction
+# Using PCA
+
+pca.out <- princomp(data_for_clustering, cor=T,scores=T)
+pca.out
+pca.out$loadings
+
+Variance<-(pca.out$sdev)^2
+max_Var<-round(max(Variance),1)
+Components<-c(1:25)
+Components<-as.integer(Components)
+plot(Components,Variance,main="Scree Plot",xlab="Number of Components",ylab="Variance",type="o",col="blue",ylim=c(0,max_Var),axes=FALSE)
+axis(1,at=1:25)
+axis(2,at=0:10)
+
+df10 =pca.out$scores
+df11 =  df10[,c(1:5)]
+
+
+
+# Average silhouette method for k-means clustering
+k.max <- 10
+data.out <- df11
+# data.out <- df_Hmisc_for_clustering[-22,-23]
+sil <- rep(0, k.max)
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+
+km.res <- kmeans(data.out, centers = i, nstart = 25)
+ss <- silhouette(km.res$cluster, dist(data.out))
+sil[i] <- mean(ss[, 3])
+}
+# Plot the average silhouette width
+plot(1:k.max, sil, type = "b", pch = 19,
+frame = FALSE, xlab = "Number of clusters k")
+abline(v = which.max(sil), lty = 2)
+
+print(sil[6])
+print(sil[2])
+
+# Partition around medoids
+pam.out <- pam(data.out, 4)
+head(pam.out$cluster)
+plot(pam.out)
+
+pam.out$silinfo$avg.width
+
+k.max = 20
+for (k in 2:k.max) {
+  pam.out <- pam(data.out, k)
+  sil[k] = pam.out$silinfo$avg.width
+}
+
+plot(1:k.max, sil, type = "b", pch = 19,
+frame = FALSE, xlab = "Number of clusters k")
+abline(v = which.max(sil), lty = 2)
+
+print(sil[6])
+print(sil[2])
+
+# Using Clara
+clarax <- clara(data.out, 6, samples=10)
+# Silhouette plot
+plot(silhouette(clarax), col = 2:3, main = "Silhouette plot")
+
+clarax$silinfo$avg.width
+
+for (k in 2:k.max) {
+  pam.out <- pam(data.out, k)
+  sil[k] = pam.out$silinfo$avg.width
+}
+
+plot(1:k.max, sil, type = "b", pch = 19,
+frame = FALSE, xlab = "Number of clusters k")
+abline(v = which.max(sil), lty = 2)
+
+t = scale(data.out)
+db <- fpc::dbscan(data.out, eps = 2.7, MinPts = 1)
+db[["cluster"]]
+sil.dbscan <- silhouette(db$cluster, dist(dt))
+summary(sil.dbscan)
+plot(sil.dbscan, col = 2:3, main = "Silhouette plot")
+
+
+```
+
+
+
+
+
