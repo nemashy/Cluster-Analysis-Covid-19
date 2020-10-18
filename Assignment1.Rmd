@@ -9,11 +9,27 @@ output:
 
 ---
 
+
 \newpage 
 \tableofcontents 
 \listoffigures
 \listoftables
 \newpage
+\pagebreak
+
+\abstract
+
+The novel COVID-19 corona virus is still not well understood and there are many open questions related to patterns in its spread. The goal of this assignment is to discover if there are any regional patterns that exist using cluster analysis.
+
+
+The assignment uses COVD-19 pandemic data collected from the Our World In Data site [@WorldInData]. The data contains 29 indicators related to the
+COVID-19 cases for 208 countries. The data set is updated daily from when the pandemic started. For this assignment, a subset of the
+data will be used; this subset consists of all the information on the pandemic on the 02 of September
+2020.
+
+
+There are three kinds of clustering methods that will be explored in this analysis: hierarchical, partitioning and density based methods. In order to determine any regional patterns, the number of clusters will be limited to 6, resembling the six regions that are: Africa, Asia, Europe, North America, Oceania and South America.
+
 
 
 ```{r setup, include=FALSE}
@@ -37,15 +53,12 @@ if(!require(visdat)) install.packages("visdat", repos = "http://cran.us.r-projec
 if(!require(Hmisc)) install.packages("Hmisc", repos = "http://cran.us.r-project.org")
 if(!require(missForest)) install.packages("missForest", repos = "http://cran.us.r-project.org")
 if(!require(corrplot)) install.packages("corrplot", repos = "http://cran.us.r-project.org")
-
+if(!require(kableExtra)) install.packages("kableExtra", repos = "http://cran.us.r-project.org")
 ```
 
 
+```{r echo=FALSE, acronyms-tab, message=FALSE}
 
-
-
-```{r acronyms-tab}
-library(kableExtra)
 # Display this on the first page to see what and from where each variable was collected.
 owid_covid_codebook <- read_csv("owid-covid-codebook.csv")
 knitr::kable(owid_covid_codebook, digits = 5, caption = "Acronyms") %>%
@@ -58,19 +71,6 @@ knitr::kable(owid_covid_codebook, digits = 5, caption = "Acronyms") %>%
 
 
 \newpage
-\abstract
-
-The novel COVID-19 corona virus is still not well understood and there are many open questions related to patterns in its spread. The goal of this assignment is to discover if there are any regional patterns that exist using cluster analysis.
-
-
-The assignment uses COVD-19 pandemic data collected from the Our World In Data site [@WorldInData]. The data contains 29 indicators related to the
-COVID-19 cases for 208 countries. The data set is updated daily from when the pandemic started. For this assignment, a subset of the
-data will be used; this subset consists of all the information on the pandemic on the 02 of September
-2020.
-
-
-There are three kinds of clustering methods that will be explored in this analysis: hierarchical, partitioning and density based methods. In order to determine any regional patterns, the number of clusters will be limited to 6, resembling the six regions that are: Africa, Asia, Europe, North America, Oceania and South America.
-
 
 
 \pagebreak
@@ -80,7 +80,9 @@ There are three kinds of clustering methods that will be explored in this analys
 
 # Exploratory Data Analysis
 
-```{r }
+## Importing the Data
+
+```{r include=FALSE}
 
 # Reading the data
 df1 <- read_excel("owid-covid-data.xlsx", sheet = "Data")
@@ -95,28 +97,21 @@ str(df1)
 
 ```
 
-The data was exported to a dataframe from an excel file "owid-covid-data.xlsx". The first step is to check if the data has been imported correctly using the head() and tail() functions. This was confirmed by running the code. The next step included checking the structure of the dataframe and also the variables in the data (See variables in Table \@ref(tab:acronyms-tab)). Location, iso_code, continent and date were found to be in character format while the rest of the variables are numerical. This is fine expcept for the date which should be in a date format. However, since this column has only one date, the column will not be used for ana;ysis and will be removed from the dataframe.
+The data was exported to a dataframe from an excel file "owid-covid-data.xlsx". The first step was to check if the data has been imported correctly using the head() and tail() functions. This file was confirmed to have been imported correctly. The next step included checking the structure of the dataframe and also the variables in the data (See variables in Table \@ref(tab:acronyms-tab)). Location, iso_code, continent and date were found to be in character format while the rest of the variables are numerical. The date variable is expected to be in a date format. However, since this column has only one date, the column will not be used for analysis and will be removed from the dataframe.
 
-The next step is to visualize the distribution of the variables and this will be done using box and whisker plots. 
+The next step was to visualize the distribution of the variables and this was done using box and whisker plots. This is a very important step as it may highlight outliers and incorrectly recorded values that are out of the expected range. 
 
+## Distribution of variables
 
+In plotting the distribution of numerical variables, the variables were divided into three groups. This makes it easier to analyse the variables. The variable in the first group are shown in Fig \@ref(fig:group-1).
 
-## Distribution
-
-
-
-The data shows that handwashing_facilties, extreme poverty, male smokers and female smokers are among the columns with the highest percentages of missing data.
-
-
-
-
-```{r }
+```{r group-1, echo=FALSE, warning=FALSE, fig.cap="Group 1 of Variables"}
 
 # Plot box and whisker for all variables
 
 df1 %>%
   keep(is.numeric) %>%
-  select(c(1:8)) %>%
+  select(c(1:9)) %>%
   gather() %>% 
   ggplot(aes(value)) +
     facet_wrap(~ key, scales = "free") +
@@ -127,7 +122,7 @@ df1 %>%
         alpha=0.2,
         
         # Notch?
-        notch=TRUE,
+        notch=FALSE,
         notchwidth = 0.8,
         
         # custom outliers
@@ -139,52 +134,21 @@ df1 %>%
 
 
 ```
+Most variabled have many outleiers that make them seem as if thier values are less spread. This indicates that a clustering method that is less susceptible to outliers can be used.
 
-The first seven figures shpw that most of the data is concerntrated very close to less than a thousand except for total_cases_per_million which is more spread and between 0 and 5000. All the variables contain numerous outliers and this shows that we might need a clustering method that is robust and not affected by outliers.
-
-```{r}
-df1 %>%
-  keep(is.numeric) %>%
-  select(c(9:16)) %>%
-  gather() %>% 
-  ggplot(aes(value)) +
-    facet_wrap(~ key, scales = "free") +
-    geom_boxplot(
-            # custom boxes
-        color="blue",
-        fill="blue",
-        alpha=0.2,
-        
-        # Notch?
-        notch=TRUE,
-        notchwidth = 0.8,
-        
-        # custom outliers
-        outlier.colour="black",
-        outlier.fill="black",
-        outlier.size=2
-    )
-
-```
-Almost half of the variables
-Median_age and aged_65_older values are much more spread.  The numbers seem resasonable given that a smaller percentage of the population is age above 65 and usually the median age of most countries is expected to be below 50 given that there usually more young people than older people in country. Countries like Japan and Italy seem to have the highest percentage of older people with a median age of 48.2 and 47.9. The Niger and Uganda have the youngest population with a median age of 16.1 and 15.4. In genral European countries seems to have an older society while Africa countries have a much younger population.
-
-Monaco and Singapore have the highstest population densities while China has the highest population. As a result these countries stand out as outliers with regards to population variables.
-
-New Deaths per million are hightest in north and south america.
+Taking a deeper look into the data, it is immediately obvious that new_cases_smoothed_per_million might has an incorrectly recorded value given that it has a negative outlier. To deal with the negative value in new_cases_smoothed_per_million the data was explored to identify the observation with the negative value. This data point was found to be belonging to Luxembourg. Upon further investigation, Luxembourg seems to have negative values for new_cases_smoothed and new_cases_smoothed_per_million. This is probably because the new_cases_smoothed_per_million is derived from new_cases_smoothed.
 
 
-New cases smoothed per million show a negative number(outlier). This is most likely a entry error and the values will be replaced with a regional average.
-
-
-The histograms also suggest that there is a negative value in new_cases_smoothed_per_million. 
-
-To deal with the negative value in new_cases_smoothed_per_million the data was expolred to indentify the observation with the negative value. Upon inspection it was also found that the observation also had a negative value for new_cases_smoothed. The two values were replaced with the regional means.
- 
-```{r include=FALSE}
+```{r include=F}
 # Find the obserservation with negative value
-df1 %>% 
+Lx = df1 %>% 
   filter(new_cases_smoothed_per_million < 0)
+head(Lx)
+```
+
+
+```{r include=FALSE, warning=FALSE}
+
 
 # Replace negative value with continental mean
 df1  = df1 %>% 
@@ -195,12 +159,55 @@ df1  = df1 %>%
          new_cases_smoothed = ifelse(new_cases_smoothed < 0,
                                      mean(new_cases_smoothed),
                                      new_cases_smoothed))
-  
 ```
 
-Upon further investigation, Luxembourg seems to have negative values for new_cases_smoothed and new_cases_smoothed_per_million. This is probably because the new_cases_smoothed_per_million is derived from new_cases_smoothed. 
 
-```{r}
+ 
+
+
+
+
+
+For variables in Fig \@ref(fig:group-2, there are numerous outliers in each of the variables. 
+
+
+```{r group-2, echo=FALSE, warning=FALSE, fig.cap="Group 2 of Variables"}
+df1 %>%
+  keep(is.numeric) %>%
+  select(c(10:16)) %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_boxplot(
+            # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=FALSE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=2
+    )
+
+```
+
+Median_age and aged_65_older values are much more spread.  The numbers seem resasonable given that a smaller percentage of the population is age above 65 and usually the median age of most countries is expected to be below 50 given that there usually more young people than older people in country. Countries like Japan and Italy seem to have the highest percentage of older people with a median age of 48.2 and 47.9. The Niger and Uganda have the youngest population with a median age of 16.1 and 15.4. In general European countries seems to have an older society while Africa countries have a much younger population.
+
+Monaco and Singapore have the highest population densities while China has the highest population. As a result these countries stand out as outliers with regards to population variables.
+
+New Deaths per million are highest in north and South America.
+
+New cases smoothed per million show a negative number(outlier). This is most likely a entry error and the values will be replaced with a regional average.
+
+The histograms also suggest that there is a negative value in new_cases_smoothed_per_million. 
+
+
+```{r echo=FALSE, warning=FALSE, fig.cap="Group 3 of Variables"}
 
 df1 %>%
   keep(is.numeric) %>%
@@ -215,7 +222,7 @@ df1 %>%
         alpha=0.2,
         
         # Notch?
-        notch=TRUE,
+        notch=FALSE,
         notchwidth = 0.8,
         
         # custom outliers
@@ -230,15 +237,13 @@ The observations for these variables look more spread with less outliers. The va
 
 ## Missing values
 
-
-
 ```{r include=F}
 summary(df1)
 ```
 
 Running a summary on the dataframe shows that there are various columns with missing data. 
 
-```{r missing_data_tab}
+```{r , echo=FALSE}
 missing_data_visual <- vis_miss(df1, sort_miss = T) # Visualise to see rows/columns with missing data
 #missing_data_visual
 
@@ -251,13 +256,15 @@ missing_data_table = aggr_plot$missings %>%
   arrange(desc(Count)) %>%
   mutate(Percentage = Count/208)
 
+```
+```{r missing-data-table, echo=FALSE}
 knitr::kable(missing_data_table, digits = 5, caption = "Missing data visualisation") %>%
   kable_styling(full_width = F, font_size = 7) %>%
   column_spec(1, border_left = T) %>%
   column_spec(3, border_right = T)
 ```
 
-As show in Table \@ref(missing_data_tab), a number of variables have a very high number of missing values including handwashing_facilities, extreme_poverty, male smokers and female smokers. It is generally not ggod working with data or columns that have a high percentage of missing data. Therefore various methods of imputing the missing data will be observed in the next section.
+As show in (Table \@ref(tab:missing-data-table)), a number of variables have a very high number of missing values including handwashing_facilities, extreme_poverty, male smokers and female smokers. It is generally not ggod working with data or columns that have a high percentage of missing data. Therefore various methods of imputing the missing data will be observed in the next section.
 
 ## Imputation by data scrapping
 
@@ -274,13 +281,12 @@ percentage_of_missing_rows <- missing_rows/total_rows * 100
 percentage_of_missing_rows
 
 ```
-Over 78% of rows have missing data therefore simply omitting the rows with missing will lead to a loss a huge size of important data.
 
 Population density missing values were imputed using the data from wikipedia [@PopulationDensity]. The data for all the countries with missing values was found except for the Falkland Islands. 
 
 
 
-```{r }
+```{r include=F}
 
 # Imputing population density missing values.
 
@@ -304,7 +310,7 @@ Median age missing values were imputed using the data found from the CIA [@Media
 
 
 
-```{r}
+```{r include=F}
 
 # Imputing median_age missing values.
 
@@ -338,12 +344,6 @@ sum(is.na(df1$aged_65_older))
 ```
 
 Median age above 75 years old was ignored since there was not much data on the internet regarding this variable.
-
-
-Searching the source of the data maps to a site: https://github.com/owid/covid-19-data/blob/master/public/data/owid-covid-codebook.csv which says the gdp_per_capita 	Gross domestic product at purchasing power parity (constant 2011 international dollars), most recent year available. Given that the most recent data from the world bank (https://databank.worldbank.org/source/jobs/Series/NY.GDP.PCAP.PP.KD#) which matches this data is for the year 2016, the data was used for imputing the data. Note the data is not available
-
-
-
 
 Extreme poverty is a population with an income of less than $1.90 a day. From the data the Share of the population living in extreme poverty, most recent year available since 2010. The data from wikipedia [@Poverty]. The data is very similar to that available without missing values, therefore it will be better to use the data for imputing. 
 
@@ -399,9 +399,7 @@ Only three observations were found to have missing life expectancy values. Imput
 
 
 No data was found on the internet woith regards to the rest of the variables on their missing data. There alternative methods had to be applied.
-```{r echo=FALSE,  out.width = '100%', out.height='100%', fig.align="center" }
-knitr::include_graphics("Capture.png")
-```
+
 
 With regards to population density, extreme poverty, gdp per capita, hospital beds per thousand, aged 65 and older and aged 70 and older, a better imputation method would be replacing missing values with column regional means given that countries in the same regions are more likely to have the same of these variables.
 
@@ -427,13 +425,16 @@ df6 <- df1 %>%
 Due to hand_washing_facilities having missing data greater than 70%, the variable was removed since it is most likely that the imputed values will be far from the actual values.
 
 After imputation using the data scrapping and regional averages, the looks like below:
-```{r}
+```{r include=F}
 
 # Remove handwashing_facilities since there is not enough 
 # data for imputation
 
 df7 <- select(df6,-handwashing_facilities)
 aggr_plot <- VIM::aggr(df7, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df7), cex.axis=.5, gap=3, ylab=c("Histogram of missing data","Pattern"), plot = T)
+
+```
+```{r include=FALSE}
 plot(aggr_plot, cex.axis=.5, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
@@ -448,23 +449,6 @@ aggr_plot <- VIM::aggr(df7, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE
 ```
 The results show that handwashing_facilites is missing 56.25% of the values followed by extreme_poverty missing 42.3% of the values. In total, 78.4% of the samples have missing values.
 
-
-
-
-
-
-
-
-
-
-
-```{r include=FALSE}
-df_correlation_plot <- df7 %>%
-  keep(is.numeric)
-
-correlation_matrix <- cor(df_correlation_plot)
-corrplot(correlation_matrix, method="circle")
-```
 
 ## Mice
 
@@ -486,7 +470,7 @@ load("replaced_missing_data.RData")
 sum(is.na(imputed_data)) # Check if imputations have been done
 ```
 
-```{r}
+```{r echo=FALSE}
 # Check the quality of imputations
 
 mice::densityplot(imputed_data)
@@ -520,20 +504,6 @@ Hmisc is a multiple purpose package useful for data analysis, high – level gra
 mi (Multiple imputation with diagnostics) package provides several features for dealing with missing values. Like other packages, it also builds multiple imputation models to approximate missing values. And, uses predictive mean matching method like the mice package.
 
 There is also the Amelia package and mi package that are used for imputation but these will not be considered for this analysis.
-
-
-
-
-
-
-
-This will be support for dimension reduction.
-```{r include=FALSE}
-
-correlation_matrix <- cor(mice_data_for_clustering)
-corrplot(correlation_matrix, method="circle")
-```
-
 
 
 
@@ -581,23 +551,8 @@ In cluster analysis, the number of clusters of interest is 6 given that we have 
 
 Hierarchical clustering involves creating clusters that have a predetermined ordering from top to bottom. In this excercise complete, single, average, median and centroid linkage were tested.
 
+The results from heirachical clustering are shown in :
 
-The results from heirachical clustering are shown below:
-
-
-
-
-## K-means
-
-## K-mediods
-
-## Clara
-
-## DBSCAN
-
-# Dimension Reduction
-
-## Results
 
 
 ```{r include=FALSE}
@@ -610,7 +565,7 @@ The randomizing, re-running, averaging and final run is a very good advice.
 
 
 
-```{r }
+```{r include=F}
 # Hierarchical clustering
 # Compute pairwise distance matrices
 dist.out <- dist(data.out,
@@ -655,30 +610,12 @@ plot(hc, labels = F,-1)
 plot(silhouette(cutree(hc,6),dist.out))
 
 
-
-
-
-# # 
-# rect.hclust(hc, k = 6, border = 2:3)
-# 
-# hcd <- as.dendrogram(hc)
-# # Define nodePar
-# nodePar <- list(lab.cex = 0.6,
-#                 pch = c(20, 19),
-#                 cex = 0.7,
-#                 col = c("green","yellow"))
-# plot(hcd,
-#      xlab = "Height",
-#      nodePar = nodePar,
-#      main = "Cluster dendrogram",
-#      edgePar = list(col = c("red","blue"), lwd = 2:1),
-#      horiz = TRUE)
 ```
 
 
-```{r}
+```{r echo=F}
 hc_results <- read_excel("HeirachicalResults.xlsx")
-knitr::kable(hc_results, digits = 5, caption = "Acronyms") %>%
+knitr::kable(hc_results, digits = 5, caption = "HCClust") %>%
   kable_styling(full_width = F, font_size = 7) %>%
   column_spec(1, border_left = T) %>%
   column_spec(2, border_right = T)
@@ -689,31 +626,9 @@ tt = tibble(Country = hc[["labels"]], Group = silhouette(cutree(hc_single,6),dis
 
 The results show that single linkage had the best results with a average silhouette width of 0.83. China 3, India 4, Indonesia 5, Pakistan 2, Brazil 2, US 6 are outliers in this data. The rest of the countries fall within the same group. Although the average silhouette width is high, the results do not demonstrate any regional patterns for the six continents.
 
+## K-means
 
-```{r echo=FALSE}
- # clustering visualization
-sub_grp <- cutree(hc, k = 6)
-fviz_cluster(list(data = data.out,
-                  cluster = sub_grp ))
-```
-
-
-```{r, echo=FALSE}
-fviz_nbclust(data.out,
-             FUN = hcut,
-             method = "wss")
-```
-
-```{r include=FALSE}
-c = fviz_nbclust(data.out,
-                 FUN = hcut,
-                 method = "silhouette")
-c
-```
-
-
-
-```{r}
+```{r echo=F}
 
 # Using k-means clustering
 k.max <- 10
@@ -722,12 +637,33 @@ k.max <- 10
 sil <- rep(0, k.max)
 # Compute the average silhouette width for
 # k = 2 to k = 10
+set.seed(100)
 for(i in 2:k.max){
-
-km.res <- kmeans(data.out, centers = i, nstart = 25)
-ss <- silhouette(km.res$cluster, dist(data.out))
-sil[i] <- mean(ss[, 3])
+  
+  km.res <- kmeans(data.out, centers = i, nstart = 25)
+  ss <- silhouette(km.res$cluster, dist(data.out))
+  sil[i] <- mean(ss[, 3])
+  if (i == 2) {
+    clusters_2 = km.res$cluster
+  }
+  if (i == 6) {
+    clusters_6 = km.res$cluster
+  }
 }
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+knitr::kable(clusters_6_dataframe, digits = 3, caption = "K-means") %>%
+  kable_styling(full_width = F, font_size = 7) %>%
+  column_spec(1, border_left = T) %>%
+  column_spec(4, border_right = T)
+
+
 # Plot the average silhouette width
 plot(1:k.max,
      sil, type = "b",
@@ -737,28 +673,105 @@ plot(1:k.max,
 
 abline(v = which.max(sil), lty = 2)
 
-print(sil[6])
-print(sil[2])
+#print(sil[6])
+#print(sil[2])
 ```
-K-means clustering results show that the average silhouette width for six clusters is 0.677787 for 6 clusters. The diagram suggest that the best number of cluster in the data is 2 with an ASW of 0.9736113.
+K-means clustering results show that the average silhouette width for six clusters is 0.677787 for 6 clusters. The diagram suggest that the best number of cluster in the data is 2 with an ASW of 0.9736113. India and China form part of their own clusters while other countries are in the second cluster. More than 80% of african countries fall in groups 4 and 5, around 70 % of Asian countries fall in cluster 4 and 5, 88% of North American countries fall in cluster 4, 87% of Oceania countries fall in clusters 4, 76 of south American Countries fall in cluster 4 and 6. This information seem to suggests that there are mainly two clusters that is 4 and 5. This is further supported by the ASW of 0.9736113 for two clusters.
 
 
-```{r }
+## K-Mediods
+
+```{r echo=F}
 # Using k-medoids clustering
+set.seed(100)
 pam.out <- pam(data.out, 6)
-head(pam.out$cluster)
-plot(pam.out)
+
+
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+  pam.out <- pam(data.out, i)
+  sil[i] <- pam.out[["silinfo"]][["avg.width"]]
+  if (i==6) {
+    class_avg_width = pam.out[["silinfo"]][["clus.avg.widths"]]
+    clusters_6 = pam.out$clustering
+  }
+
+}
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+
+# Plot the average silhouette width
+plot(1:k.max,
+     sil, type = "b",
+     pch = 19,
+     frame = FALSE,
+     xlab = "Number of clusters k")
+
+abline(v = which.max(sil), lty = 2)
+
+#print(sil[6])
+#print(sil[2])
+#class_avg_width
+
 ```
 
-```{r include=FALSE}
+The ASW for six clusters is 0.610983 while that of 2 clusters is the maximum at 0.9736113. The information also suggest that the optimum number of clusters is 2. Over 90% of African countries belong to group 1, 2 and 3, 75% of Asian countries belong to group 1, 2 and 3. 86% of European countries belong to group 2 and 3, 91% of North American countries belong to group 2 and 3, 75% of Oceania countries belong to group 3 and more than 90% of South American countries belong to group 1, 2 and 3. These results show that there are at most three main clusters in the data and there is no specific regional pattern that can be seen. The PAM method also suggests that the optimum number of clusters in 2.
+
+
+
+## Clara
+```{r echo=FALSE}
 # Using Clara
 clara.out <- clara(data.out, 6, samples=10)
-# Silhouette plot
-plot(silhouette(clara.out), col = 2:3, main = "Silhouette plot")
+
+# Using k-medoids clustering
+set.seed(100)
+
+
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+  clara.out <- clara(data.out, i, samples=10)
+  sil[i] <- clara.out[["silinfo"]][["avg.width"]]
+  if (i==6) {
+    class_avg_width = clara.out[["silinfo"]][["clus.avg.widths"]]
+    clusters_6 = clara.out$clustering
+  }
+
+}
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+
+# Plot the average silhouette width
+plot(1:k.max,
+     sil, type = "b",
+     pch = 19,
+     frame = FALSE,
+     xlab = "Number of clusters k")
+
+abline(v = which.max(sil), lty = 2)
+
+#print(sil[6])
+#print(sil[2])
+#class_avg_width
+
 ```
-The dataset is very small and this results in Clara performing worse than PAM.
+More than 91% of African countries are found in group 1, 2 and 3. More than 77% of Asian countries are found in group 1, 2 and 3. More than 76% of countries in Europe are found in groups 2 and 3. More than 91% of North American countries are found in groups 2 and 3. More than 87% of Oceanian countries are found in groups2 and 3 while more than 90% of South American countries are found in group 1, 2 and 3. Again, the information suggest that there are at most the main clusters in the data. 
 
-
+Density based scanning was tested and in order to get six main clusters on the data the epsilon value was set to 47 000 and the min points to 3. This AWS was -0.21 which indicates that the clusters are of poor quality and objects are less similar in their own cluster. This may well mean that the data either has too many of too few clusters. The DBSCAN method also pick up many outliers in the data and very few countries belonging to groups. This method will not be explored for further analysis given that it does not give any good results.
 ```{r include=FALSE}
 # Using DBSCAN
 t = scale(data.out)
@@ -768,8 +781,6 @@ sil.dbscan <- silhouette(db$cluster, dist(t))
 summary(sil.dbscan)
 plot(sil.dbscan, col = 2:3, main = "Silhouette plot")
 ```
-
-
 
 
 ```{r include=FALSE}
@@ -780,7 +791,7 @@ data.out <- df_Hmisc_for_clustering
 The randomizing, re-running, averaging and final run is a very good advice.
 
 
-```{r include=FALSE}
+```{r echo=F}
 
 # Using k-means clustering
 k.max <- 10
@@ -789,12 +800,29 @@ k.max <- 10
 sil <- rep(0, k.max)
 # Compute the average silhouette width for
 # k = 2 to k = 10
+set.seed(100)
 for(i in 2:k.max){
-
-km.res <- kmeans(data.out, centers = i, nstart = 25)
-ss <- silhouette(km.res$cluster, dist(data.out))
-sil[i] <- mean(ss[, 3])
+  
+  km.res <- kmeans(data.out, centers = i, nstart = 25)
+  ss <- silhouette(km.res$cluster, dist(data.out))
+  sil[i] <- mean(ss[, 3])
+  if (i == 2) {
+    clusters_2 = km.res$cluster
+  }
+  if (i == 6) {
+    clusters_6 = km.res$cluster
+  }
 }
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+
+
 # Plot the average silhouette width
 plot(1:k.max,
      sil, type = "b",
@@ -804,12 +832,13 @@ plot(1:k.max,
 
 abline(v = which.max(sil), lty = 2)
 
-print(sil[6])
+#print(sil[6])
+#print(sil[2])
 
 ```
 
 
-```{r include=FALSE}
+```{r include=F}
 # Hierarchical clustering
 # Compute pairwise distance matrices
 dist.out <- dist(data.out,
@@ -819,59 +848,127 @@ hc <- hclust(dist.out,
              method = "complete")
 # Visualization of hclust
 plot(hc, labels = F,-1)
-# 
-rect.hclust(hc, k = 6, border = 2:3)
+plot(silhouette(cutree(hc,6),dist.out))
 
-hcd <- as.dendrogram(hc)
-# Define nodePar
-nodePar <- list(lab.cex = 0.6,
-                pch = c(20, 19),
-                cex = 0.7,
-                col = c("green","yellow"))
-plot(hcd,
-     xlab = "Height",
-     nodePar = nodePar,
-     main = "Cluster dendrogram",
-     edgePar = list(col = c("red","blue"), lwd = 2:1),
-     horiz = TRUE)
+
+
+hc_single <- hclust(dist.out,
+             method = "single")
+# Visualization of hclust
+plot(hc_single, labels = F,-1)
+plot(silhouette(cutree(hc_single,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "average")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "median")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "centroid")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
 ```
 
 
 
-```{r include=FALSE}
- # clustering visualization
-sub_grp <- cutree(hc, k = 6)
-fviz_cluster(list(data = data.out,
-                  cluster = sub_grp ))
-```
-
-
-```{r pressure, echo=FALSE}
-fviz_nbclust(data.out,
-             FUN = hcut,
-             method = "wss")
-```
-
-```{r include=FALSE}
-c = fviz_nbclust(data.out,
-                 FUN = hcut,
-                 method = "silhouette")
-c
-```
-
-
-```{r include=FALSE}
+```{r echo=F}
 # Using k-medoids clustering
+set.seed(100)
 pam.out <- pam(data.out, 6)
-head(pam.out$cluster)
-plot(pam.out)
+
+
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+  pam.out <- pam(data.out, i)
+  sil[i] <- pam.out[["silinfo"]][["avg.width"]]
+  if (i==6) {
+    class_avg_width = pam.out[["silinfo"]][["clus.avg.widths"]]
+    clusters_6 = pam.out$clustering
+  }
+
+}
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+
+# Plot the average silhouette width
+plot(1:k.max,
+     sil, type = "b",
+     pch = 19,
+     frame = FALSE,
+     xlab = "Number of clusters k")
+
+abline(v = which.max(sil), lty = 2)
+
+#print(sil[6])
+#print(sil[2])
+#class_avg_width
 ```
 
-```{r include=FALSE}
+```{r include=FALSE, echo=F}
 # Using Clara
 clara.out <- clara(data.out, 6, samples=10)
 # Silhouette plot
 plot(silhouette(clara.out), col = 2:3, main = "Silhouette plot")
+
+
+
+# Using k-medoids clustering
+set.seed(100)
+
+
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+  clara.out <- clara(data.out, i, samples=10)
+  sil[i] <- clara.out[["silinfo"]][["avg.width"]]
+  if (i==6) {
+    class_avg_width = clara.out[["silinfo"]][["clus.avg.widths"]]
+    clusters_6 = clara.out$clustering
+  }
+
+}
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+
+# Plot the average silhouette width
+plot(1:k.max,
+     sil, type = "b",
+     pch = 19,
+     frame = FALSE,
+     xlab = "Number of clusters k")
+
+abline(v = which.max(sil), lty = 2)
+
+#print(sil[6])
+#print(sil[2])
+#class_avg_width
 ```
 The dataset is very small and this results in Clara performing worse than PAM.
 
@@ -886,6 +983,17 @@ summary(sil.dbscan)
 plot(sil.dbscan, col = 2:3, main = "Silhouette plot")
 ```
 
+# Dimension reduction
+
+A correlation plot shows that a number of variables in the dataset are highly correlated. Therefore, the size of the dataset can be reduced but keeping most of the information in the dataset using dimension reduction techniques. In this exercise PCA will be used to reduce the size of the data and clustering will be performed on the reduced data.
+
+```{r echo=FALSE}
+df_correlation_plot <- df_Hmisc_for_clustering %>%
+  keep(is.numeric)
+
+correlation_matrix <- cor(df_correlation_plot)
+corrplot(correlation_matrix, method="circle", tl.pos='n')
+```
 
 
 ```{r include=FALSE}
@@ -893,21 +1001,13 @@ plot(sil.dbscan, col = 2:3, main = "Silhouette plot")
 # Using PCA
 
 pca.out <- princomp(data.out, cor=T,scores=T)
-pca.out
-pca.out$loadings
-
 Variance<-(pca.out$sdev)^2
 max_Var<-round(max(Variance),1)
 Components<-c(1:25)
 Components<-as.integer(Components)
-plot(Components,Variance,main="Scree Plot",xlab="Number of Components",ylab="Variance",type="o",col="blue",ylim=c(0,max_Var),axes=FALSE)
-axis(1,at=1:25)
-axis(2,at=0:10)
 
 df10 =pca.out$scores
-df11 =  df10[,c(1:5)]
-
-
+df11 =  df10[,c(1:4)]
 
 # Average silhouette method for k-means clustering
 k.max <- 10
@@ -926,9 +1026,6 @@ sil[i] <- mean(ss[, 3])
 plot(1:k.max, sil, type = "b", pch = 19,
 frame = FALSE, xlab = "Number of clusters k")
 abline(v = which.max(sil), lty = 2)
-
-print(sil[6])
-print(sil[2])
 
 # Partition around medoids
 pam.out <- pam(data.out, 4)
@@ -974,8 +1071,219 @@ summary(sil.dbscan)
 plot(sil.dbscan, col = 2:3, main = "Silhouette plot")
 
 ```
+The scree plot shows that most of the variance in the data can be found in the first 4 principal componenents. The first 4 principal compnents were taken to represent the whole dataset.
+
+The ASW for k-means clustering for all cluster numbers was found to be generally lower than that of the unreduced dataset. For 6 clusters, the ASW is 0.3549331 and for 2 clusters 0.7914952. The value for six clusters is very low to suggest any reasonable regional patterns given that the AWS is low.
+
+
+```{r echo=F}
+
+# Using k-means clustering
+k.max <- 10
+
+# data.out <- df_Hmisc_for_clustering[-22,-23]
+sil <- rep(0, k.max)
+# Compute the average silhouette width for
+# k = 2 to k = 10
+set.seed(100)
+for(i in 2:k.max){
+  
+  km.res <- kmeans(data.out, centers = i, nstart = 25)
+  ss <- silhouette(km.res$cluster, dist(data.out))
+  sil[i] <- mean(ss[, 3])
+  if (i == 2) {
+    clusters_2 = km.res$cluster
+  }
+  if (i == 6) {
+    clusters_6 = km.res$cluster
+  }
+}
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+
+
+# Plot the average silhouette width
+plot(1:k.max,
+     sil, type = "b",
+     pch = 19,
+     frame = FALSE,
+     xlab = "Number of clusters k")
+
+abline(v = which.max(sil), lty = 2)
+
+# print(sil[6])
+# print(sil[2])
+
+```
+
+
+```{r include=F}
+# Hierarchical clustering
+# Compute pairwise distance matrices
+dist.out <- dist(data.out,
+                 method = "euclidean")
+# Hierarchical clustering results
+hc <- hclust(dist.out,
+             method = "complete")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc_single <- hclust(dist.out,
+             method = "single")
+# Visualization of hclust
+plot(hc_single, labels = F,-1)
+plot(silhouette(cutree(hc_single,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "average")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "median")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "centroid")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+```
+
+
+
+```{r}
+hc_results <- read_excel("HeirachicalResultsHmisc.xlsx")
+knitr::kable(hc_results, digits = 5, caption = "HCClust") %>%
+  kable_styling(full_width = F, font_size = 7) %>%
+  column_spec(1, border_left = T) %>%
+  column_spec(2, border_right = T)
+
+tt = tibble(Country = hc[["labels"]], Group = silhouette(cutree(hc_single,6),dist.out)[,1])
+```
+
+
+The AWS for all the heirachical clustering methods are less than or equal to 0.5 for 6 clusters. This also shows that the counties are less likely to be divided ino six continental regions thereby no evidence for regional patterns.
+
+
+```{r echo=F}
+# Using k-medoids clustering
+set.seed(100)
+pam.out <- pam(data.out, 6)
+
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+  pam.out <- pam(data.out, i)
+  sil[i] <- pam.out[["silinfo"]][["avg.width"]]
+  if (i==6) {
+    class_avg_width = pam.out[["silinfo"]][["clus.avg.widths"]]
+    clusters_6 = pam.out$clustering
+  }
+
+}
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+
+# Plot the average silhouette width
+plot(1:k.max,
+     sil, type = "b",
+     pch = 19,
+     frame = FALSE,
+     xlab = "Number of clusters k")
+
+abline(v = which.max(sil), lty = 2)
+
+#print(sil[6])
+#print(sil[2])
+
+```
+The K-mediods method gives an ASW of 0.32 for six clusters. It also suggests that there are probably more than six clusters for the data.
+
+
+```{r echo=F}
+# Using Clara
+clara.out <- clara(data.out, 6, samples=10)
+# Silhouette plot
+plot(silhouette(clara.out), col = 2:3, main = "Silhouette plot")
+
+
+
+# Using k-medoids clustering
+set.seed(100)
+
+
+# Compute the average silhouette width for
+# k = 2 to k = 10
+for(i in 2:k.max){
+  clara.out <- clara(data.out, i, samples=10)
+  sil[i] <- clara.out[["silinfo"]][["avg.width"]]
+  if (i==6) {
+    class_avg_width = clara.out[["silinfo"]][["clus.avg.widths"]]
+    clusters_6 = clara.out$clustering
+  }
+}
+
+clusters_6_dataframe = as.data.frame(clusters_6) %>%
+  mutate(continent = df1$continent) %>%
+  group_by(continent, clusters_6) %>%
+  summarise(count = n()) %>%
+  group_by(continent) %>%
+  mutate(Percentage = round(count*100/sum(count), digits = 2))
+
+# Plot the average silhouette width
+plot(1:k.max,
+     sil, type = "b",
+     pch = 19,
+     frame = FALSE,
+     xlab = "Number of clusters k")
+
+abline(v = which.max(sil), lty = 2)
+
+print(sil[6])
+print(sil[2])
+class_avg_width
+
+```
+The dataset is very small and this results in Clara performing worse than PAM.
+
+
+In general, reducing the dimension of the data led to a worse performance in the clustering algorithm. Therefore, it is best to use the full dataset for clustering.
+
+
+# Conclusion
+
+The results show that the best algorithm is xys
+The optimum number of clusters is
+The following countries are outliers
+Regional patterns on a continental scale do not exist in the data
 
 
 This code was optimised for reading
 
+# References
 
