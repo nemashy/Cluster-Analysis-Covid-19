@@ -2,11 +2,11 @@
 title: \vspace{3.5in} Cluster Analysis Assignment
 author: "Nyasha Mashanda"
 date: "`r Sys.Date()`"
+bibliography: "bibliography.bib"
 output:
-   pdf_document:
-      fig_caption: true
-      number_sections: true
-      df_print: kable
+  bookdown::pdf_document2:
+    keep_tex: true
+
 ---
 
 \newpage 
@@ -15,13 +15,6 @@ output:
 \listoftables
 \newpage
 
-\abstract
-
-The goal of this assignment is to predict if an individual will develop Coronary Heart Disease (CHD) over a 10 year period using various risk factors. This will be achieved by using support vector machines (SVM) and neural networks (NN).
-
-There are three kinds of SVM models that will be built: Logistic Regression without regularization, Lasso Logistic Regression and a model using all variables. The three model types will also be used in building a neural network. In order to make sure that the models are optimised, the support vector machine will be tuned using tune.svm from the e1071 package and the neural networks will be tuned using h2o.grid from the h2o package. The best model will be selected based on classification accuracy.
-
-\pagebreak
 
 ```{r setup, include=FALSE}
 
@@ -47,53 +40,230 @@ if(!require(corrplot)) install.packages("corrplot", repos = "http://cran.us.r-pr
 
 ```
 
-```{r include=FALSE}
 
+
+
+
+```{r acronyms-tab}
+library(kableExtra)
 # Display this on the first page to see what and from where each variable was collected.
 owid_covid_codebook <- read_csv("owid-covid-codebook.csv")
+knitr::kable(owid_covid_codebook, digits = 5, caption = "Acronyms") %>%
+  kable_styling(full_width = F, font_size = 7) %>%
+  column_spec(1, border_left = T) %>%
+  column_spec(2, border_right = T)
+
 #View(owid_covid_codebook)
 ```
+
+
+\newpage
+\abstract
+
+The novel COVID-19 corona virus is still not well understood and there are many open questions related to patterns in its spread. The goal of this assignment is to discover if there are any regional patterns that exist using cluster analysis.
+
+
+The assignment uses COVD-19 pandemic data collected from the Our World In Data site [@WorldInData]. The data contains 29 indicators related to the
+COVID-19 cases for 208 countries. The data set is updated daily from when the pandemic started. For this assignment, a subset of the
+data will be used; this subset consists of all the information on the pandemic on the 02 of September
+2020.
+
+
+There are three kinds of clustering methods that will be explored in this analysis: hierarchical, partitioning and density based methods. In order to determine any regional patterns, the number of clusters will be limited to 6, resembling the six regions that are: Africa, Asia, Europe, North America, Oceania and South America.
+
+
+
+\pagebreak
+
 
 # What about standardising the data????
 
 # Exploratory Data Analysis
 
-## Distribution
-
-## Missing values
-
-# Cluster Analysis
-
-## K-means
-
-## K-mediods
-
-## Clara
-
-## DBSCAN
-
-# Dimension Reduction
-
-## Results
-```{r include=FALSE}
+```{r }
 
 # Reading the data
 df1 <- read_excel("owid-covid-data.xlsx", sheet = "Data")
 
 # Check if data has been imported correctly
-# head(df1) 
-# tail(df1)
+head(df1) 
+tail(df1)
 
 # Look at the structure of the data
-#str(df1)
+str(df1)
 
+
+```
+
+The data was exported to a dataframe from an excel file "owid-covid-data.xlsx". The first step is to check if the data has been imported correctly using the head() and tail() functions. This was confirmed by running the code. The next step included checking the structure of the dataframe and also the variables in the data (See variables in Table \@ref(tab:acronyms-tab)). Location, iso_code, continent and date were found to be in character format while the rest of the variables are numerical. This is fine expcept for the date which should be in a date format. However, since this column has only one date, the column will not be used for ana;ysis and will be removed from the dataframe.
+
+The next step is to visualize the distribution of the variables and this will be done using box and whisker plots. 
+
+
+
+## Distribution
+
+
+
+The data shows that handwashing_facilties, extreme poverty, male smokers and female smokers are among the columns with the highest percentages of missing data.
+
+
+
+
+```{r }
+
+# Plot box and whisker for all variables
+
+df1 %>%
+  keep(is.numeric) %>%
+  select(c(1:8)) %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_boxplot(
+      # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=2
+    )
+
+
+
+```
+
+The first seven figures shpw that most of the data is concerntrated very close to less than a thousand except for total_cases_per_million which is more spread and between 0 and 5000. All the variables contain numerous outliers and this shows that we might need a clustering method that is robust and not affected by outliers.
+
+```{r}
+df1 %>%
+  keep(is.numeric) %>%
+  select(c(9:16)) %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_boxplot(
+            # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=2
+    )
+
+```
+Almost half of the variables
+Median_age and aged_65_older values are much more spread.  The numbers seem resasonable given that a smaller percentage of the population is age above 65 and usually the median age of most countries is expected to be below 50 given that there usually more young people than older people in country. Countries like Japan and Italy seem to have the highest percentage of older people with a median age of 48.2 and 47.9. The Niger and Uganda have the youngest population with a median age of 16.1 and 15.4. In genral European countries seems to have an older society while Africa countries have a much younger population.
+
+Monaco and Singapore have the highstest population densities while China has the highest population. As a result these countries stand out as outliers with regards to population variables.
+
+New Deaths per million are hightest in north and south america.
+
+
+New cases smoothed per million show a negative number(outlier). This is most likely a entry error and the values will be replaced with a regional average.
+
+
+The histograms also suggest that there is a negative value in new_cases_smoothed_per_million. 
+
+To deal with the negative value in new_cases_smoothed_per_million the data was expolred to indentify the observation with the negative value. Upon inspection it was also found that the observation also had a negative value for new_cases_smoothed. The two values were replaced with the regional means.
+ 
+```{r include=FALSE}
+# Find the obserservation with negative value
+df1 %>% 
+  filter(new_cases_smoothed_per_million < 0)
+
+# Replace negative value with continental mean
+df1  = df1 %>% 
+  group_by(continent) %>%
+  mutate(new_cases_smoothed_per_million = ifelse(new_cases_smoothed_per_million < 0,
+                                                 mean(new_cases_smoothed_per_million),
+                                                 new_cases_smoothed_per_million),
+         new_cases_smoothed = ifelse(new_cases_smoothed < 0,
+                                     mean(new_cases_smoothed),
+                                     new_cases_smoothed))
+  
+```
+
+Upon further investigation, Luxembourg seems to have negative values for new_cases_smoothed and new_cases_smoothed_per_million. This is probably because the new_cases_smoothed_per_million is derived from new_cases_smoothed. 
+
+```{r}
+
+df1 %>%
+  keep(is.numeric) %>%
+  select(c(17:25)) %>%
+  gather() %>% 
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_boxplot(
+            # custom boxes
+        color="blue",
+        fill="blue",
+        alpha=0.2,
+        
+        # Notch?
+        notch=TRUE,
+        notchwidth = 0.8,
+        
+        # custom outliers
+        outlier.colour="black",
+        outlier.fill="black",
+        outlier.size=2
+    )
+
+```
+
+The observations for these variables look more spread with less outliers. The variables also suggest that there are generally more male smokers than female smokers. Furthermore, the data show that it is mostly european countries that are wealthy or less poor. The numbers seem to be in the expected ranges.
+
+## Missing values
+
+
+
+```{r include=F}
+summary(df1)
+```
+
+Running a summary on the dataframe shows that there are various columns with missing data. 
+
+```{r missing_data_tab}
 missing_data_visual <- vis_miss(df1, sort_miss = T) # Visualise to see rows/columns with missing data
 #missing_data_visual
 
-aggr_plot <- VIM::aggr(df1, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df1), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+aggr_plot <- VIM::aggr(df1, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df1), cex.axis=.5, gap=3, ylab=c("Histogram of missing data","Pattern"), plot = F)
+plot(aggr_plot, cex.axis=.5, gap=3, ylab=c("Histogram of missing data","Pattern"))
+
+# Creating table
+missing_data_table = aggr_plot$missings %>%
+  filter(Count > 0) %>%
+  arrange(desc(Count)) %>%
+  mutate(Percentage = Count/208)
+
+knitr::kable(missing_data_table, digits = 5, caption = "Missing data visualisation") %>%
+  kable_styling(full_width = F, font_size = 7) %>%
+  column_spec(1, border_left = T) %>%
+  column_spec(3, border_right = T)
 ```
 
-The data shows that handwashing_facilties, extreme poverty, male smokers and female smokers are among the columns with the highest percentages of missing data.
+As show in Table \@ref(missing_data_tab), a number of variables have a very high number of missing values including handwashing_facilities, extreme_poverty, male smokers and female smokers. It is generally not ggod working with data or columns that have a high percentage of missing data. Therefore various methods of imputing the missing data will be observed in the next section.
+
+## Imputation by data scrapping
+
+There are various sources that were used to collect the data including the European Center for Disease Prevention and Control. However some of the data can be found on wikipedia and various internet sources. Consequently, looking for the data before applying an imputation algorithms is much better. Although the data was not exactly be the same, in most cases the values were found to be very similar thereby justify the imputation.
+
+
 
 ```{r include=FALSE}
 
@@ -106,11 +276,11 @@ percentage_of_missing_rows
 ```
 Over 78% of rows have missing data therefore simply omitting the rows with missing will lead to a loss a huge size of important data.
 
-Population density missing values will be imputed using the data from wikipedia on the following site https://en.wikipedia.org/wiki/List_of_countries_and_dependencies_by_population_density
+Population density missing values were imputed using the data from wikipedia [@PopulationDensity]. The data for all the countries with missing values was found except for the Falkland Islands. 
 
-It is important to indicate that the data was given in 2019 but given that population densities change very slowly, this is better than replacing with an average/median.
 
-```{r include=FALSE}
+
+```{r }
 
 # Imputing population density missing values.
 
@@ -130,11 +300,11 @@ sum(is.na(df1$population_density)) # Check if data has been imputed
 
 ```
 
-Median age missing values will be imputed using the data found from the following wikipedia site: https://en.wikipedia.org/wiki/List_of_countries_by_median_age
+Median age missing values were imputed using the data found from the CIA [@MedianAge]. Using this site only three countries had values for median age that could not be found.
 
 
 
-```{r include=FALSE}
+```{r}
 
 # Imputing median_age missing values.
 
@@ -146,13 +316,11 @@ position_in_vector <- which(df1$location %in% missing_data_countries)
 
 df1$median_age[position_in_vector] <-  imputations
 
-sum(is.na(df1$median_age))
 
 ```
 
-Median ages data was added using data from the 2019 data https://www.cia.gov/library/publications/the-world-factbook/fields/343rank.html
 
-Only data for Syria was found.
+aged_65_older missing values were imputed using 2019 data from wikipedia [@Aged65]. Only data for Syria, Taiwan and British Virgin Islands. The rest of the countries values could not be imputed using this method. 
 ```{r include=FALSE}
 
 # Imputing aged_65_older missing values.
@@ -169,7 +337,7 @@ sum(is.na(df1$aged_65_older))
 
 ```
 
-Median age above 75 years old was ignored
+Median age above 75 years old was ignored since there was not much data on the internet regarding this variable.
 
 
 Searching the source of the data maps to a site: https://github.com/owid/covid-19-data/blob/master/public/data/owid-covid-codebook.csv which says the gdp_per_capita 	Gross domestic product at purchasing power parity (constant 2011 international dollars), most recent year available. Given that the most recent data from the world bank (https://databank.worldbank.org/source/jobs/Series/NY.GDP.PCAP.PP.KD#) which matches this data is for the year 2016, the data was used for imputing the data. Note the data is not available
@@ -177,7 +345,7 @@ Searching the source of the data maps to a site: https://github.com/owid/covid-1
 
 
 
-Extreme poverty is a population with an income of less than $1.90 a day. From the data the Share of the population living in extreme poverty, most recent year available since 2010. The data from the following site https://en.wikipedia.org/wiki/List_of_countries_by_percentage_of_population_living_in_poverty the data is very similar to that available without missing values, therefore it will be better to use the data for imputing. 
+Extreme poverty is a population with an income of less than $1.90 a day. From the data the Share of the population living in extreme poverty, most recent year available since 2010. The data from wikipedia [@Poverty]. The data is very similar to that available without missing values, therefore it will be better to use the data for imputing. 
 
 Most countries with 0 percent were having missing values
 
@@ -198,7 +366,7 @@ df1$extreme_poverty[position_in_vector] <-  extreme_pov
 sum(is.na(df1$extreme_poverty))
 ```
 
-This was skipped due to insufficient data to fill in the missing values.
+Cardiovascular death rate was skipped due to insufficient data to fill in the missing values.
 ```{r include=FALSE}
 df4 <- df1[is.na(df1$cardiovasc_death_rate),]
 missing_data_countries <-  df4$location
@@ -227,13 +395,16 @@ female and male smokers info not enough
 handwashing facilities skipped because data is not enough.
 hospital bed per thousand informatiion was found to be too old for example Chad which had data for 2005. Given that there are many years between the time the data was collected and this year the data was ignored.
 
-From the world bank data on life expectancy ( https://data.worldbank.org/indicator/SP.DYN.LE00.IN ), the life expectancy of Guernsey, Jersey and Kosovo are 82.6, 80.6, 71.95 years respectively.
+Only three observations were found to have missing life expectancy values. Imputation was done using the world bank data on life expectancy [@LifeExpectancy]. The life expectancy of Guernsey, Jersey and Kosovo were found to be 82.6, 80.6, 71.95 years respectively.
 
 
-
+No data was found on the internet woith regards to the rest of the variables on their missing data. There alternative methods had to be applied.
 ```{r echo=FALSE,  out.width = '100%', out.height='100%', fig.align="center" }
 knitr::include_graphics("Capture.png")
 ```
+
+With regards to population density, extreme poverty, gdp per capita, hospital beds per thousand, aged 65 and older and aged 70 and older, a better imputation method would be replacing missing values with column regional means given that countries in the same regions are more likely to have the same of these variables.
+
 
 ```{r include=FALSE}
 # For the gdp per capita the missing values will be replaced by the mean for each region under the assumption that countries that are closer to each other usually have similar rates of poverty measures/gdp_per_capita, hospital beds per thousand, aged_65_older and aged_70_older
@@ -253,16 +424,20 @@ df6 <- df1 %>%
 ```
 
 
+Due to hand_washing_facilities having missing data greater than 70%, the variable was removed since it is most likely that the imputed values will be far from the actual values.
 
-```{r include=FALSE}
+After imputation using the data scrapping and regional averages, the looks like below:
+```{r}
 
 # Remove handwashing_facilities since there is not enough 
 # data for imputation
 
 df7 <- select(df6,-handwashing_facilities)
-visdat::vis_miss(df7)
+aggr_plot <- VIM::aggr(df7, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df7), cex.axis=.5, gap=3, ylab=c("Histogram of missing data","Pattern"), plot = T)
+plot(aggr_plot, cex.axis=.5, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
+Now the highest percentage of missing values is found in male smokers and female smokers having 34% and 33 % missing values. For the these variables and other that have missing values different imputation algorithms will be explored and the one that gives the best results will be chosen.
 
 ```{r include=FALSE}
 
@@ -273,100 +448,14 @@ aggr_plot <- VIM::aggr(df7, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE
 ```
 The results show that handwashing_facilites is missing 56.25% of the values followed by extreme_poverty missing 42.3% of the values. In total, 78.4% of the samples have missing values.
 
-```{r include=FALSE}
-
-# Plot box and whisker for all variables
-
-df7 %>%
-  keep(is.numeric) %>%
-  select(c(1:8)) %>%
-  gather() %>% 
-  ggplot(aes(value)) +
-    facet_wrap(~ key, scales = "free") +
-    geom_boxplot(
-      # custom boxes
-        color="blue",
-        fill="blue",
-        alpha=0.2,
-        
-        # Notch?
-        notch=TRUE,
-        notchwidth = 0.8,
-        
-        # custom outliers
-        outlier.colour="black",
-        outlier.fill="black",
-        outlier.size=2
-    )
-
-df7 %>%
-  keep(is.numeric) %>%
-  select(c(9:16)) %>%
-  gather() %>% 
-  ggplot(aes(value)) +
-    facet_wrap(~ key, scales = "free") +
-    geom_boxplot(
-            # custom boxes
-        color="blue",
-        fill="blue",
-        alpha=0.2,
-        
-        # Notch?
-        notch=TRUE,
-        notchwidth = 0.8,
-        
-        # custom outliers
-        outlier.colour="black",
-        outlier.fill="black",
-        outlier.size=2
-    )
-
-df7 %>%
-  keep(is.numeric) %>%
-  select(c(17:25)) %>%
-  gather() %>% 
-  ggplot(aes(value)) +
-    facet_wrap(~ key, scales = "free") +
-    geom_boxplot(
-            # custom boxes
-        color="blue",
-        fill="blue",
-        alpha=0.2,
-        
-        # Notch?
-        notch=TRUE,
-        notchwidth = 0.8,
-        
-        # custom outliers
-        outlier.colour="black",
-        outlier.fill="black",
-        outlier.size=2
-    )
 
 
-```
-
-The histograms also suggest that there is a negative value in new_cases_smoothed_per_million. 
 
 
-```{r include=FALSE}
-# Find the obserservation with negative value
-df7 %>% 
-  filter(new_cases_smoothed_per_million < 0)
 
-# Replace negative value with continental mean
-df7  = df7 %>% 
-  group_by(continent) %>%
-  mutate(new_cases_smoothed_per_million = ifelse(new_cases_smoothed_per_million < 0,
-                                                 mean(new_cases_smoothed_per_million),
-                                                 new_cases_smoothed_per_million),
-         new_cases_smoothed = ifelse(new_cases_smoothed < 0,
-                                     mean(new_cases_smoothed),
-                                     new_cases_smoothed))
-  
-```
 
-Upon further investigation, Luxembourg seems to have negative values for new_cases_smoothed and new_cases_smoothed_per_million. This is probably because the new_cases_smoothed_per_million is derived from new_cases_smoothed. 
+
+
 
 
 ```{r include=FALSE}
@@ -377,28 +466,11 @@ correlation_matrix <- cor(df_correlation_plot)
 corrplot(correlation_matrix, method="circle")
 ```
 
+## Mice
 
+The mice package allows multivariate imputation by chained equations. MICE assumes that the missing data are Missing at Random (MAR), which means that the propensity for a data point to be missing is not related to the missing data but is related to some of the observed data [@MissingData]. In this section, the MICE package will be used on the remaining variables with missing data that are cardiovasc_death_rate, diabetes prevalence, female and male smokers.
 
-The mice package allows multivariate imputation by chained equations
-
-MICE assumes that the missing data are Missing at Random (MAR), which means that the propensity for a data point to be missing is not related to the missing data but is related to some of the observed data.
-https://www.theanalysisfactor.com/mar-and-mcar-missing-data/
-
-Therefore it is important to determine which columns have data points that may be missing at random. The imputation process is not a one size fits all method.
-
-There is also the Amelia package which also makes an assumption that the missing data is random in nature (MSR)
-
-
-Hmisc is a multiple purpose package useful for data analysis, high – level graphics, imputing missing values, advanced table making, model fitting & diagnostics (linear regression, logistic regression & cox regression) etc. Hmisc assumes linearity in the variables being predicted.
-
-mi (Multiple imputation with diagnostics) package provides several features for dealing with missing values. Like other packages, it also builds multiple imputation models to approximate missing values. And, uses predictive mean matching method like the mice package.
-
-The following variables need need impiutation using some of the methods.
-
-## female_smokers and male_smokers, cardiovasc_death_rate and diabetes prevalence are MACR variables therefore the MICE package will be used on this data.
-
-various packages will be used for imputation and the one that yields the best result will be chosen.
-
+The number of multiple imputations was set to 5, method was set to classification and regression trees and the maximum number of iterations set to 500. 5 datasets were created and the goodness of fit is shown in the plots below. The graphs of imputed values(red) closely resembles that of the available values(blue). This shows that the imputation process was good.
 
 
 ```{r include=FALSE}
@@ -411,22 +483,25 @@ various packages will be used for imputation and the one that yields the best re
 #save(imputed_data, file = "replaced_missing_data.RData")
 load("replaced_missing_data.RData")
 
-sum(is.na(imputed_data))
+sum(is.na(imputed_data)) # Check if imputations have been done
 ```
 
-```{r include=FALSE}
+```{r}
 # Check the quality of imputations
 
 mice::densityplot(imputed_data)
 
 ```
 
+
+Going forward the second dataset was randomly selected from the five datasets. This will not affect the outcome significantly given that the datasets have very similar properties. The continent, date and iso_code variables were removed from the dataset as they will not be useful in the final analysis. The dataset was named mice_data_for_clustering.
+
 ```{r include=FALSE}
 # Select one of the imputed datasets
 
 completedData <- mice::complete(imputed_data, 2)
-View(completedData)
-str(completedData)
+#View(completedData)
+#str(completedData)
 
 # Remove isocode, continent and data ????
 # Is it necessary continentt
@@ -439,6 +514,17 @@ mice_data_for_clustering <- df8[,-1]
 
 ```
 
+## Hmisc
+Hmisc is a multiple purpose package useful for data analysis, high – level graphics, imputing missing values, advanced table making, model fitting & diagnostics (linear regression, logistic regression & cox regression) etc. Hmisc assumes linearity in the variables being predicted. The package was also used to impute values on the missing values.
+
+mi (Multiple imputation with diagnostics) package provides several features for dealing with missing values. Like other packages, it also builds multiple imputation models to approximate missing values. And, uses predictive mean matching method like the mice package.
+
+There is also the Amelia package and mi package that are used for imputation but these will not be considered for this analysis.
+
+
+
+
+
 
 
 This will be support for dimension reduction.
@@ -449,9 +535,6 @@ corrplot(correlation_matrix, method="circle")
 ```
 
 
-
-It is not enough to try out one package for imputing data therefore try out more!
-The question is if any one value of the observation is missing, will it affect the missingness of a specific variable.
 
 
 The percentage of population aged_65_older looks to have regional patterns therefore it is justified to use regional medians/averages for imputation. Since aged_70_older can is closely related to aged_65_older it is decided to use the same method.
@@ -487,6 +570,35 @@ df_Hmisc_for_clustering <- df_Hmisc[,-1]
 #summary(df_Hmisc_for_clustering)
 ```
 
+The imputations were made on the dataset and the resulting dataset was named df_Hmisc_for_clustering. The two datasets were used for clustering and the results were compared.
+
+
+# Cluster Analysis
+
+In cluster analysis, the number of clusters of interest is 6 given that we have six distinct regions in the data that are Africa, Asia, Europe, North America, Oceania and South America. In order to quantify the goodness of fit for each clustering method, the average silhouette method which determines the quality of the clustering. The optimum number of clusters in a dataset will have the maximum average silhouette width.
+
+## Heirachical clustering
+
+Hierarchical clustering involves creating clusters that have a predetermined ordering from top to bottom. In this excercise complete, single, average, median and centroid linkage were tested.
+
+
+The results from heirachical clustering are shown below:
+
+
+
+
+## K-means
+
+## K-mediods
+
+## Clara
+
+## DBSCAN
+
+# Dimension Reduction
+
+## Results
+
 
 ```{r include=FALSE}
 data.out <- mice_data_for_clustering
@@ -496,7 +608,112 @@ data.out <- mice_data_for_clustering
 The randomizing, re-running, averaging and final run is a very good advice.
 
 
+
+
+```{r }
+# Hierarchical clustering
+# Compute pairwise distance matrices
+dist.out <- dist(data.out,
+                 method = "euclidean")
+# Hierarchical clustering results
+hc <- hclust(dist.out,
+             method = "complete")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc_single <- hclust(dist.out,
+             method = "single")
+# Visualization of hclust
+plot(hc_single, labels = F,-1)
+plot(silhouette(cutree(hc_single,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "average")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "median")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+hc <- hclust(dist.out,
+             method = "centroid")
+# Visualization of hclust
+plot(hc, labels = F,-1)
+plot(silhouette(cutree(hc,6),dist.out))
+
+
+
+
+
+# # 
+# rect.hclust(hc, k = 6, border = 2:3)
+# 
+# hcd <- as.dendrogram(hc)
+# # Define nodePar
+# nodePar <- list(lab.cex = 0.6,
+#                 pch = c(20, 19),
+#                 cex = 0.7,
+#                 col = c("green","yellow"))
+# plot(hcd,
+#      xlab = "Height",
+#      nodePar = nodePar,
+#      main = "Cluster dendrogram",
+#      edgePar = list(col = c("red","blue"), lwd = 2:1),
+#      horiz = TRUE)
+```
+
+
+```{r}
+hc_results <- read_excel("HeirachicalResults.xlsx")
+knitr::kable(hc_results, digits = 5, caption = "Acronyms") %>%
+  kable_styling(full_width = F, font_size = 7) %>%
+  column_spec(1, border_left = T) %>%
+  column_spec(2, border_right = T)
+
+tt = tibble(Country = hc[["labels"]], Group = silhouette(cutree(hc_single,6),dist.out)[,1])
+
+```
+
+The results show that single linkage had the best results with a average silhouette width of 0.83. China 3, India 4, Indonesia 5, Pakistan 2, Brazil 2, US 6 are outliers in this data. The rest of the countries fall within the same group. Although the average silhouette width is high, the results do not demonstrate any regional patterns for the six continents.
+
+
+```{r echo=FALSE}
+ # clustering visualization
+sub_grp <- cutree(hc, k = 6)
+fviz_cluster(list(data = data.out,
+                  cluster = sub_grp ))
+```
+
+
+```{r, echo=FALSE}
+fviz_nbclust(data.out,
+             FUN = hcut,
+             method = "wss")
+```
+
 ```{r include=FALSE}
+c = fviz_nbclust(data.out,
+                 FUN = hcut,
+                 method = "silhouette")
+c
+```
+
+
+
+```{r}
 
 # Using k-means clustering
 k.max <- 10
@@ -521,62 +738,12 @@ plot(1:k.max,
 abline(v = which.max(sil), lty = 2)
 
 print(sil[6])
-
+print(sil[2])
 ```
+K-means clustering results show that the average silhouette width for six clusters is 0.677787 for 6 clusters. The diagram suggest that the best number of cluster in the data is 2 with an ASW of 0.9736113.
 
 
-```{r include=FALSE}
-# Hierarchical clustering
-# Compute pairwise distance matrices
-dist.out <- dist(data.out,
-                 method = "euclidean")
-# Hierarchical clustering results
-hc <- hclust(dist.out,
-             method = "complete")
-# Visualization of hclust
-plot(hc, labels = F,-1)
-# 
-rect.hclust(hc, k = 6, border = 2:3)
-
-hcd <- as.dendrogram(hc)
-# Define nodePar
-nodePar <- list(lab.cex = 0.6,
-                pch = c(20, 19),
-                cex = 0.7,
-                col = c("green","yellow"))
-plot(hcd,
-     xlab = "Height",
-     nodePar = nodePar,
-     main = "Cluster dendrogram",
-     edgePar = list(col = c("red","blue"), lwd = 2:1),
-     horiz = TRUE)
-```
-
-
-
-```{r include=FALSE}
- # clustering visualization
-sub_grp <- cutree(hc, k = 6)
-fviz_cluster(list(data = data.out,
-                  cluster = sub_grp ))
-```
-
-
-```{r, echo=FALSE}
-fviz_nbclust(data.out,
-             FUN = hcut,
-             method = "wss")
-```
-
-```{r include=FALSE}
-c = fviz_nbclust(data.out,
-                 FUN = hcut,
-                 method = "silhouette")
-c
-```
-
-
-```{r include=FALSE}
+```{r }
 # Using k-medoids clustering
 pam.out <- pam(data.out, 6)
 head(pam.out$cluster)
